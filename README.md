@@ -71,6 +71,29 @@ Toute tentative renvoie `403`.
 
 ---
 
+## Dépendances
+
+> **Légende** — 🔴 indispensable (le service ne démarre pas ou ne sert à rien) ·
+> 🟠 nécessaire à une fonctionnalité (le reste continue de marcher) ·
+> 🟡 optionnelle (dégradation silencieuse, journalisée)
+
+| Dépendance | Type | Conséquence si absente |
+|---|---|---|
+| **PostgreSQL** (`menu-db`) | 🔴 | Le service ne démarre pas |
+| **franchise-service** | 🟡 | **Au démarrage uniquement**, pour créer un menu de départ par restaurant. Après 10 essais, le service abandonne avec un avertissement et **continue de servir les menus déjà en base**. Les nouveaux restaurants n'auront simplement pas de menu tant qu'un redémarrage n'a pas eu lieu (ou que le franchisé n'a pas créé ses articles). |
+| **auth-service** | 🟠 | Aucun appel réseau, mais les routes de gestion exigent un jeton valide. La **lecture publique du menu reste accessible sans authentification.** |
+
+### Qui dépend de ce service
+
+| Service | Type | Conséquence si `menu-service` est arrêté |
+|---|---|---|
+| `web-app` | 🟠 | Les pages de menu (client et franchisé) sont cassées ; les commandes déjà passées restent consultables |
+
+`order-service` **ne l'appelle pas** : les articles commandés sont envoyés par le
+client au moment de la commande.
+
+---
+
 ## Lancement
 
 ```bash
