@@ -1,0 +1,100 @@
+openapi: 3.0.3
+info:
+  title: Menu Service API
+  description: >
+    Good Food 3.0 — per-restaurant menus. Each menu item belongs to one
+    restaurant (tenant). Customers browse a restaurant's menu publicly;
+    a franchisee manages only their own restaurant's menu (JWT tenant_id).
+  version: 0.1.0
+servers:
+  - url: http://localhost:8085
+tags:
+  - name: Menu
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    MenuItemInput:
+      type: object
+      required: [name, price_cents, category]
+      properties:
+        name: { type: string }
+        description: { type: string }
+        price_cents: { type: integer, minimum: 1 }
+        category: { type: string, example: Burgers }
+        emoji: { type: string, example: 🍔 }
+        available: { type: boolean, default: true }
+    MenuItem:
+      allOf:
+        - $ref: '#/components/schemas/MenuItemInput'
+        - type: object
+          properties:
+            id: { type: string, format: uuid }
+            restaurant_id: { type: string, format: uuid }
+            rating: { type: number }
+paths:
+  /api/menu:
+    get:
+      tags: [Menu]
+      summary: Browse a restaurant's menu (public)
+      parameters:
+        - in: query
+          name: restaurantId
+          required: true
+          schema: { type: string, format: uuid }
+      responses:
+        '200':
+          description: Available items of the restaurant
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MenuItem' } }
+    post:
+      tags: [Menu]
+      summary: Create an item in the manager's own restaurant
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MenuItemInput' }
+      responses:
+        '201': { description: Created }
+        '403': { description: Not a manager of a restaurant }
+  /api/menu/manage:
+    get:
+      tags: [Menu]
+      summary: List the manager's own restaurant menu (incl. unavailable)
+      security: [{ bearerAuth: [] }]
+      responses:
+        '200':
+          description: All items of the manager's restaurant
+          content:
+            application/json:
+              schema: { type: array, items: { $ref: '#/components/schemas/MenuItem' } }
+  /api/menu/{id}:
+    patch:
+      tags: [Menu]
+      summary: Update an item (own restaurant only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/MenuItemInput' }
+      responses:
+        '200': { description: Updated }
+        '403': { description: Item belongs to another restaurant }
+    delete:
+      tags: [Menu]
+      summary: Delete an item (own restaurant only)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '204': { description: Deleted }
+        '403': { description: Item belongs to another restaurant }

@@ -1,0 +1,41 @@
+services:
+  menu-service:
+    build: .
+    container_name: menu-service
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@menu-db:5432/${POSTGRES_DB}?sslmode=disable
+      FRANCHISE_SERVICE_URL: http://franchise-service:8089
+    depends_on:
+      menu-db:
+        condition: service_healthy
+    networks:
+      - microservices-net
+
+  menu-db:
+    image: postgres:17-alpine
+    container_name: menu-postgres
+    restart: unless-stopped
+    env_file:
+      - .env
+    ports:
+      - "5435:5432"
+    volumes:
+      - menu_data:/var/lib/postgresql/data
+    networks:
+      - microservices-net
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+networks:
+  microservices-net:
+    external: true
+volumes:
+  menu_data:
