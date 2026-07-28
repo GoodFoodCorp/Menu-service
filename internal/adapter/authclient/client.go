@@ -29,7 +29,7 @@ func New(baseURL string) *Client {
 }
 
 func (c *Client) ListTenants(ctx context.Context) ([]Tenant, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+"/api/restaurants", nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL, nil)
 	if err != nil {
 		return nil, err
 	}
