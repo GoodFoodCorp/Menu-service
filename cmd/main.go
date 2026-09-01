@@ -39,7 +39,11 @@ func main() {
 	}
 	log.Info().Msg("migrations applied")
 
-	uc := application.NewUseCases(postgres.NewMenuRepository(pool))
+	uc := application.NewUseCases(
+		postgres.NewMenuRepository(pool),
+		postgres.NewMenuPlanRepository(pool),
+		postgres.NewCategoryRepository(pool),
+	)
 
 	// Seed a starter menu per restaurant (best-effort, non-blocking startup).
 	go seedMenus(log, cfg.FranchiseServiceURL, uc)
