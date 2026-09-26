@@ -93,6 +93,25 @@ func (r *MenuRepository) MaxSortOrder(ctx context.Context, tenantID string) (int
 	return n, err
 }
 
+func (r *MenuRepository) ListByIDs(ctx context.Context, ids []string) ([]domain.MenuItem, error) {
+	rows, err := r.pool.Query(ctx, `SELECT `+selectCols+` FROM menu_items WHERE id = ANY($1)`, ids)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	items := []domain.MenuItem{}
+	for rows.Next() {
+		var m domain.MenuItem
+		if err := rows.Scan(&m.ID, &m.TenantID, &m.Name, &m.Description, &m.PriceCents,
+			&m.Category, &m.Emoji, &m.Rating, &m.Available, &m.SortOrder); err != nil {
+			return nil, err
+		}
+		items = append(items, m)
+	}
+	return items, rows.Err()
+}
+
 func (r *MenuRepository) query(ctx context.Context, sql, tenantID string) ([]domain.MenuItem, error) {
 	rows, err := r.pool.Query(ctx, sql, tenantID)
 	if err != nil {

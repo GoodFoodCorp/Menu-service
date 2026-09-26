@@ -44,6 +44,7 @@ func NewRouter(handler *MenuHandler, jwtSecret string, log zerolog.Logger, dbChe
 	r.Route("/api/menu", func(r chi.Router) {
 		// Public catalog for customers (browse a restaurant's menu)
 		r.Get("/", handler.ListPublic)
+		r.Get("/by-ids", handler.ListByIDs)
 
 		// Manager-only management of their own restaurant's menu
 		r.Group(func(r chi.Router) {

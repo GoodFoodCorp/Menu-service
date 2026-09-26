@@ -44,3 +44,12 @@ func (uc *UseCases) ListRestaurantMenu(ctx context.Context, restaurantID string)
 	}
 	return uc.menu.ListAvailableByTenant(ctx, restaurantID)
 }
+
+// ListByIDs resolves dish ids to their details (public — used to render a
+// customer's favorited dishes, which may belong to different restaurants).
+func (uc *UseCases) ListByIDs(ctx context.Context, ids []string) ([]domain.MenuItem, error) {
+	if len(ids) == 0 {
+		return []domain.MenuItem{}, nil
+	}
+	return uc.menu.ListByIDs(ctx, ids)
+}

@@ -46,6 +46,16 @@ func (f *fakeRepo) GetByID(_ context.Context, id string) (*domain.MenuItem, erro
 	return &cp, nil
 }
 
+func (f *fakeRepo) ListByIDs(_ context.Context, ids []string) ([]domain.MenuItem, error) {
+	out := []domain.MenuItem{}
+	for _, id := range ids {
+		if m, ok := f.items[id]; ok {
+			out = append(out, *m)
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeRepo) Create(_ context.Context, m *domain.MenuItem) error {
 	cp := *m
 	f.items[m.ID] = &cp
