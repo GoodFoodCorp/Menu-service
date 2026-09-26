@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -23,6 +24,21 @@ func NewMenuHandler(uc *application.UseCases) *MenuHandler {
 func (h *MenuHandler) ListPublic(w http.ResponseWriter, r *http.Request) {
 	restaurantID := r.URL.Query().Get("restaurantId")
 	items, err := h.uc.ListRestaurantMenu(r.Context(), restaurantID)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toResponseList(items))
+}
+
+// GET /api/menu/by-ids?ids=a,b,c  (public — resolves favorited dishes)
+func (h *MenuHandler) ListByIDs(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("ids")
+	if raw == "" {
+		writeJSON(w, http.StatusOK, toResponseList(nil))
+		return
+	}
+	items, err := h.uc.ListByIDs(r.Context(), strings.Split(raw, ","))
 	if err != nil {
 		writeDomainError(w, r, err)
 		return
