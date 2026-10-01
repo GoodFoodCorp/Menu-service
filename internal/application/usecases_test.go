@@ -74,7 +74,7 @@ func (f *fakeRepo) GetByID(_ context.Context, id string) (*domain.MenuItem, erro
 	return &cp, nil
 }
 
-func (f *fakeRepo) GetByIDs(_ context.Context, ids []string) ([]domain.MenuItem, error) {
+func (f *fakeRepo) ListByIDs(_ context.Context, ids []string) ([]domain.MenuItem, error) {
 	out := []domain.MenuItem{}
 	for _, id := range ids {
 		if m, ok := f.items[id]; ok {

@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 
 	"github.com/go-chi/chi/v5"
 
@@ -32,7 +33,22 @@ func (h *MenuHandler) ListPublic(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toResponseList(items))
 }
 
-// GET /api/menu/manage  (manager: own restaurant · admin: global catalog)
+// GET /api/menu/by-ids?ids=a,b,c  (public — resolves favorited dishes)
+func (h *MenuHandler) ListByIDs(w http.ResponseWriter, r *http.Request) {
+	raw := r.URL.Query().Get("ids")
+	if raw == "" {
+		writeJSON(w, http.StatusOK, toResponseList(nil))
+		return
+	}
+	items, err := h.uc.ListByIDs(r.Context(), strings.Split(raw, ","))
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toResponseList(items))
+}
+
+// GET /api/menu/manage  (manager — own restaurant, incl. unavailable items)
 func (h *MenuHandler) ListMine(w http.ResponseWriter, r *http.Request) {
 	items, err := h.uc.ListMyMenu(r.Context(), actorFrom(r))
 	if err != nil {
