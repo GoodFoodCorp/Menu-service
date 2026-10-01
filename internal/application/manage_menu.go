@@ -6,38 +6,40 @@ import (
 	"goodfood/menu-service/internal/domain"
 )
 
-// tenantOf resolves the restaurant a manager acts on: their own tenant.
-// Managers without a tenant, or non-managers, are refused.
-func tenantOf(actor Actor) (string, error) {
-	if !actor.HasRole(RoleManager) {
-		return "", domain.NewForbiddenError("only a restaurant manager can manage a menu")
-	}
-	if actor.TenantID == "" {
-		return "", domain.NewForbiddenError("your account is not linked to a restaurant")
-	}
-	return actor.TenantID, nil
-}
-
-// ListMyMenu returns every item of the manager's restaurant (incl. unavailable).
+// ListMyMenu returns every dish the actor manages: for a franchisee, their
+// own restaurant's dishes (full control) plus the read-only global catalog
+// (they may only hide/show it — see ToggleItemAvailability). For admin,
+// their own list *is* the global catalog, so nothing to merge.
 func (uc *UseCases) ListMyMenu(ctx context.Context, actor Actor) ([]domain.MenuItem, error) {
-	tenantID, err := tenantOf(actor)
+	scope, err := scopeOf(actor)
 	if err != nil {
 		return nil, err
 	}
-	return uc.menu.ListByTenant(ctx, tenantID)
+	own, err := uc.menu.ListByScope(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	if scope == "" {
+		return own, nil
+	}
+	global, err := uc.menu.ListGlobalWithOverridesFor(ctx, scope)
+	if err != nil {
+		return nil, err
+	}
+	return append(own, global...), nil
 }
 
-// CreateItem adds an item to the manager's own restaurant.
+// CreateItem adds a dish to the actor's scope.
 func (uc *UseCases) CreateItem(ctx context.Context, actor Actor, in domain.MenuItemInput) (*domain.MenuItem, error) {
-	tenantID, err := tenantOf(actor)
+	scope, err := scopeOf(actor)
 	if err != nil {
 		return nil, err
 	}
-	maxOrder, err := uc.menu.MaxSortOrder(ctx, tenantID)
+	maxOrder, err := uc.menu.MaxSortOrder(ctx, scope)
 	if err != nil {
 		return nil, err
 	}
-	item, err := domain.NewMenuItem(tenantID, in, maxOrder+1)
+	item, err := domain.NewMenuItem(scope, in, maxOrder+1)
 	if err != nil {
 		return nil, err
 	}
@@ -47,9 +49,11 @@ func (uc *UseCases) CreateItem(ctx context.Context, actor Actor, in domain.MenuI
 	return item, nil
 }
 
-// UpdateItem edits an item, only if it belongs to the manager's restaurant.
+// UpdateItem edits a dish's own fields — only if it belongs to the actor's
+// own scope. A franchisee can never edit a global (head-office) dish, even
+// partially: see ToggleItemAvailability for what they can do to it instead.
 func (uc *UseCases) UpdateItem(ctx context.Context, actor Actor, id string, in domain.MenuItemInput) (*domain.MenuItem, error) {
-	tenantID, err := tenantOf(actor)
+	scope, err := scopeOf(actor)
 	if err != nil {
 		return nil, err
 	}
@@ -57,8 +61,8 @@ func (uc *UseCases) UpdateItem(ctx context.Context, actor Actor, id string, in d
 	if err != nil {
 		return nil, err
 	}
-	if !item.IsOwnedBy(tenantID) {
-		return nil, domain.NewForbiddenError("this item belongs to another restaurant")
+	if !item.IsOwnedBy(scope) {
+		return nil, domain.NewForbiddenError("this item is not yours to edit")
 	}
 	if err := item.ApplyUpdate(in); err != nil {
 		return nil, err
@@ -69,9 +73,10 @@ func (uc *UseCases) UpdateItem(ctx context.Context, actor Actor, id string, in d
 	return item, nil
 }
 
-// DeleteItem removes an item, only if it belongs to the manager's restaurant.
+// DeleteItem removes a dish outright — only if it belongs to the actor's own
+// scope. A franchisee can never delete a global dish.
 func (uc *UseCases) DeleteItem(ctx context.Context, actor Actor, id string) error {
-	tenantID, err := tenantOf(actor)
+	scope, err := scopeOf(actor)
 	if err != nil {
 		return err
 	}
@@ -79,8 +84,44 @@ func (uc *UseCases) DeleteItem(ctx context.Context, actor Actor, id string) erro
 	if err != nil {
 		return err
 	}
-	if !item.IsOwnedBy(tenantID) {
-		return domain.NewForbiddenError("this item belongs to another restaurant")
+	if !item.IsOwnedBy(scope) {
+		return domain.NewForbiddenError("this item is not yours to delete")
 	}
 	return uc.menu.Delete(ctx, id)
+}
+
+// ToggleItemAvailability hides/shows a dish:
+//   - own item → flips its real Available flag (affects every restaurant
+//     if global, i.e. an admin toggling their own global dish);
+//   - a franchisee facing a global dish → toggles a per-restaurant override
+//     instead, hiding it from their own customers only, without touching
+//     the item everyone else sees.
+func (uc *UseCases) ToggleItemAvailability(ctx context.Context, actor Actor, id string) (*domain.MenuItem, error) {
+	scope, err := scopeOf(actor)
+	if err != nil {
+		return nil, err
+	}
+	item, err := uc.menu.GetByID(ctx, id)
+	if err != nil {
+		return nil, err
+	}
+
+	if item.IsOwnedBy(scope) {
+		item.Available = !item.Available
+		if err := uc.menu.Update(ctx, item); err != nil {
+			return nil, err
+		}
+		return item, nil
+	}
+
+	if item.IsGlobal() && scope != "" {
+		hidden, err := uc.menu.ToggleTenantOverride(ctx, scope, id)
+		if err != nil {
+			return nil, err
+		}
+		item.HiddenForViewer = hidden
+		return item, nil
+	}
+
+	return nil, domain.NewForbiddenError("this item is not yours to hide")
 }

@@ -28,16 +28,36 @@ const (
 	RoleManager = "manager"
 )
 
+// scopeOf resolves which catalog scope the actor manages: their own
+// restaurant for a franchisee, or the global (head-office) catalog — "" —
+// for admin. Root README §6: siège creates content common to every
+// franchisee, a franchisee only ever touches their own restaurant's.
+func scopeOf(actor Actor) (string, error) {
+	if actor.HasRole(RoleAdmin) {
+		return "", nil
+	}
+	if actor.HasRole(RoleManager) {
+		if actor.TenantID == "" {
+			return "", domain.NewForbiddenError("your account is not linked to a restaurant")
+		}
+		return actor.TenantID, nil
+	}
+	return "", domain.NewForbiddenError("only a restaurant manager or head office can manage the catalog")
+}
+
 type UseCases struct {
-	menu domain.MenuRepository
+	menu       domain.MenuRepository
+	plans      domain.MenuPlanRepository
+	categories domain.CategoryRepository
 }
 
-func NewUseCases(menu domain.MenuRepository) *UseCases {
-	return &UseCases{menu: menu}
+func NewUseCases(menu domain.MenuRepository, plans domain.MenuPlanRepository, categories domain.CategoryRepository) *UseCases {
+	return &UseCases{menu: menu, plans: plans, categories: categories}
 }
 
-// ListRestaurantMenu returns the available items of one restaurant (public,
-// customer-facing). No authorization: the storefront shows it before login.
+// ListRestaurantMenu returns the available dishes of one restaurant plus the
+// global catalog, merged (public, customer-facing). No authorization: the
+// storefront shows it before login.
 func (uc *UseCases) ListRestaurantMenu(ctx context.Context, restaurantID string) ([]domain.MenuItem, error) {
 	if restaurantID == "" {
 		return nil, domain.NewValidationError("restaurantId is required")

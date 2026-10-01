@@ -42,17 +42,45 @@ func NewRouter(handler *MenuHandler, jwtSecret string, log zerolog.Logger, dbChe
 	})
 
 	r.Route("/api/menu", func(r chi.Router) {
-		// Public catalog for customers (browse a restaurant's menu)
+		// Public catalog for customers (browse a restaurant's dishes)
 		r.Get("/", handler.ListPublic)
 		r.Get("/by-ids", handler.ListByIDs)
 
-		// Manager-only management of their own restaurant's menu
+		// Manager (own restaurant) / admin (global catalog) management
 		r.Group(func(r chi.Router) {
 			r.Use(Auth(jwtSecret))
 			r.Get("/manage", handler.ListMine)
 			r.Post("/", handler.Create)
 			r.Patch("/{id}", handler.Update)
+			r.Patch("/{id}/toggle", handler.ToggleAvailability)
 			r.Delete("/{id}", handler.Delete)
+		})
+	})
+
+	r.Route("/api/menu-categories", func(r chi.Router) {
+		// Public — every dish form (franchisee or admin) needs the list
+		r.Get("/", handler.ListCategories)
+
+		// Head office only
+		r.Group(func(r chi.Router) {
+			r.Use(Auth(jwtSecret))
+			r.Post("/", handler.CreateCategory)
+			r.Delete("/{id}", handler.DeleteCategory)
+		})
+	})
+
+	r.Route("/api/menu-plans", func(r chi.Router) {
+		// Public catalog for customers (browse a restaurant's menus/formules)
+		r.Get("/", handler.ListPlansPublic)
+
+		// Manager (own restaurant) / admin (global catalog) management
+		r.Group(func(r chi.Router) {
+			r.Use(Auth(jwtSecret))
+			r.Get("/manage", handler.ListPlansMine)
+			r.Post("/", handler.CreatePlan)
+			r.Patch("/{id}", handler.UpdatePlan)
+			r.Patch("/{id}/toggle", handler.TogglePlanAvailability)
+			r.Delete("/{id}", handler.DeletePlan)
 		})
 	})
 
