@@ -49,10 +49,11 @@ type UseCases struct {
 	menu       domain.MenuRepository
 	plans      domain.MenuPlanRepository
 	categories domain.CategoryRepository
+	recipes    domain.RecipeRepository
 }
 
-func NewUseCases(menu domain.MenuRepository, plans domain.MenuPlanRepository, categories domain.CategoryRepository) *UseCases {
-	return &UseCases{menu: menu, plans: plans, categories: categories}
+func NewUseCases(menu domain.MenuRepository, plans domain.MenuPlanRepository, categories domain.CategoryRepository, recipes domain.RecipeRepository) *UseCases {
+	return &UseCases{menu: menu, plans: plans, categories: categories, recipes: recipes}
 }
 
 // ListRestaurantMenu returns the available dishes of one restaurant plus the

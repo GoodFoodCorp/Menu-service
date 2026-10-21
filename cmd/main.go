@@ -43,6 +43,7 @@ func main() {
 		postgres.NewMenuRepository(pool),
 		postgres.NewMenuPlanRepository(pool),
 		postgres.NewCategoryRepository(pool),
+		postgres.NewRecipeRepository(pool),
 	)
 
 	// Seed a starter menu per restaurant (best-effort, non-blocking startup).
