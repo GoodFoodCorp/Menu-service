@@ -8,8 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"strings"
 	"time"
 )
+
+// restaurantsPath is franchise-service's public (anonymous) restaurant list,
+// active restaurants only.
+const restaurantsPath = "/api/restaurants"
 
 // Tenant is a restaurant as exposed by franchise-service.
 type Tenant struct {
@@ -24,12 +29,14 @@ type Client struct {
 	http    *http.Client
 }
 
+// New builds a client for the franchise-service root URL (e.g.
+// http://franchise-service:8089); the restaurants path is appended per call.
 func New(baseURL string) *Client {
-	return &Client{baseURL: baseURL, http: &http.Client{Timeout: 5 * time.Second}}
+	return &Client{baseURL: strings.TrimRight(baseURL, "/"), http: &http.Client{Timeout: 5 * time.Second}}
 }
 
 func (c *Client) ListTenants(ctx context.Context) ([]Tenant, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, c.baseURL+restaurantsPath, nil)
 	if err != nil {
 		return nil, err
 	}
