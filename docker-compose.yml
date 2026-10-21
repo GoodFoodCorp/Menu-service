@@ -10,6 +10,7 @@ services:
     environment:
       DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@menu-db:5432/${POSTGRES_DB}?sslmode=disable
       FRANCHISE_SERVICE_URL: http://franchise-service:8089
+      SERVICE_API_KEY: ${SERVICE_API_KEY:?SERVICE_API_KEY is required}
     depends_on:
       menu-db:
         condition: service_healthy

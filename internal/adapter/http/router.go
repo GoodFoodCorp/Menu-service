@@ -12,7 +12,7 @@ import (
 
 type HealthChecker func(ctx context.Context) error
 
-func NewRouter(handler *MenuHandler, jwtSecret string, log zerolog.Logger, dbCheck HealthChecker) http.Handler {
+func NewRouter(handler *MenuHandler, jwtSecret, serviceKey string, log zerolog.Logger, dbCheck HealthChecker) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimw.Recoverer)
@@ -54,6 +54,8 @@ func NewRouter(handler *MenuHandler, jwtSecret string, log zerolog.Logger, dbChe
 			r.Patch("/{id}", handler.Update)
 			r.Patch("/{id}/toggle", handler.ToggleAvailability)
 			r.Delete("/{id}", handler.Delete)
+			r.Get("/{id}/recipe", handler.GetRecipe)
+			r.Put("/{id}/recipe", handler.SetRecipe)
 		})
 	})
 
@@ -82,6 +84,13 @@ func NewRouter(handler *MenuHandler, jwtSecret string, log zerolog.Logger, dbChe
 			r.Patch("/{id}/toggle", handler.TogglePlanAvailability)
 			r.Delete("/{id}", handler.DeletePlan)
 		})
+	})
+
+	// Service-to-service routes: deliberately NOT under /api, so the ingress
+	// (which only routes /api/...) never exposes them outside the cluster.
+	r.Route("/internal", func(r chi.Router) {
+		r.Use(ServiceKey(serviceKey))
+		r.Post("/recipes/lookup", handler.LookupRecipes)
 	})
 
 	return r

@@ -49,10 +49,11 @@ type UseCases struct {
 	menu       domain.MenuRepository
 	plans      domain.MenuPlanRepository
 	categories domain.CategoryRepository
+	recipes    domain.RecipeRepository
 }
 
-func NewUseCases(menu domain.MenuRepository, plans domain.MenuPlanRepository, categories domain.CategoryRepository) *UseCases {
-	return &UseCases{menu: menu, plans: plans, categories: categories}
+func NewUseCases(menu domain.MenuRepository, plans domain.MenuPlanRepository, categories domain.CategoryRepository, recipes domain.RecipeRepository) *UseCases {
+	return &UseCases{menu: menu, plans: plans, categories: categories, recipes: recipes}
 }
 
 // ListRestaurantMenu returns the available dishes of one restaurant plus the
@@ -63,6 +64,14 @@ func (uc *UseCases) ListRestaurantMenu(ctx context.Context, restaurantID string)
 		return nil, domain.NewValidationError("restaurantId is required")
 	}
 	return uc.menu.ListAvailableByTenant(ctx, restaurantID)
+}
+
+// ListRestaurantMenuPlans is the equivalent for menu plans ("formules").
+func (uc *UseCases) ListRestaurantMenuPlans(ctx context.Context, restaurantID string) ([]domain.MenuPlan, error) {
+	if restaurantID == "" {
+		return nil, domain.NewValidationError("restaurantId is required")
+	}
+	return uc.plans.ListAvailableByTenant(ctx, restaurantID)
 }
 
 // ListByIDs resolves dish ids to their details (public — used to render a

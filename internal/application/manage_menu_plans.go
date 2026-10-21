@@ -31,7 +31,7 @@ func (uc *UseCases) ListMyMenuPlans(ctx context.Context, actor Actor) ([]domain.
 // validateDishSelection checks every dish id exists and is visible to the
 // scope building the menu (their own dishes, or the global catalog).
 func (uc *UseCases) validateDishSelection(ctx context.Context, scope string, dishIDs []string) error {
-	dishes, err := uc.menu.GetByIDs(ctx, dishIDs)
+	dishes, err := uc.menu.ListByIDs(ctx, dishIDs)
 	if err != nil {
 		return err
 	}

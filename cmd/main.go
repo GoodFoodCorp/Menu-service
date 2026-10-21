@@ -43,6 +43,7 @@ func main() {
 		postgres.NewMenuRepository(pool),
 		postgres.NewMenuPlanRepository(pool),
 		postgres.NewCategoryRepository(pool),
+		postgres.NewRecipeRepository(pool),
 	)
 
 	// Seed a starter menu per restaurant (best-effort, non-blocking startup).
@@ -51,6 +52,7 @@ func main() {
 	router := httpadapter.NewRouter(
 		httpadapter.NewMenuHandler(uc),
 		cfg.JWTSecret,
+		cfg.ServiceAPIKey,
 		log,
 		func(ctx context.Context) error { return pool.Ping(ctx) },
 	)

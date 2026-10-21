@@ -263,7 +263,7 @@ var (
 )
 
 func newUC() *UseCases {
-	return NewUseCases(newFakeRepo(), newFakePlanRepo(), newFakeCategoryRepo())
+	return NewUseCases(newFakeRepo(), newFakePlanRepo(), newFakeCategoryRepo(), newFakeRecipeRepo())
 }
 
 func validInput(name string) domain.MenuItemInput {

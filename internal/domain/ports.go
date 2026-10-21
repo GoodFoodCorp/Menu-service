@@ -53,3 +53,16 @@ type CategoryRepository interface {
 	Delete(ctx context.Context, id string) error
 	MaxSortOrder(ctx context.Context) (int, error)
 }
+
+// RecipeRepository is the persistence port for dish recipes — per restaurant
+// (tenant), so a global dish can carry a different recipe in each restaurant.
+type RecipeRepository interface {
+	// Get returns a dish's recipe lines for one restaurant (empty if none).
+	Get(ctx context.Context, tenantID, itemID string) ([]RecipeLine, error)
+	// Replace atomically swaps a dish's recipe for one restaurant; an empty
+	// list deletes the recipe.
+	Replace(ctx context.Context, tenantID, itemID string, lines []RecipeLine) error
+	// Lookup returns the recipes of several dishes for one restaurant, keyed
+	// by dish id; dishes without a recipe are absent.
+	Lookup(ctx context.Context, tenantID string, itemIDs []string) (map[string][]RecipeLine, error)
+}

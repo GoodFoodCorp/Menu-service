@@ -10,6 +10,7 @@ servers:
   - url: http://localhost:8085
 tags:
   - name: Menu
+  - name: Recipes
 components:
   securitySchemes:
     bearerAuth:
@@ -35,6 +36,28 @@ components:
             id: { type: string, format: uuid }
             restaurant_id: { type: string, format: uuid }
             rating: { type: number }
+    RecipeLine:
+      type: object
+      required: [stock_item_id, quantity]
+      properties:
+        stock_item_id: { type: string, format: uuid }
+        stock_item_name: { type: string, example: Farine }
+        unit: { type: string, example: kg }
+        quantity: { type: number, minimum: 0.001, maximum: 999999999.999, description: Per dish, rounded to 3 decimals }
+    Recipe:
+      type: object
+      properties:
+        menu_item_id: { type: string, format: uuid }
+        lines: { type: array, items: { $ref: '#/components/schemas/RecipeLine' } }
+    RecipeInput:
+      type: object
+      required: [lines]
+      properties:
+        lines:
+          type: array
+          maxItems: 50
+          description: No duplicate stock_item_id. An empty array deletes the recipe.
+          items: { $ref: '#/components/schemas/RecipeLine' }
 paths:
   /api/menu:
     get:
@@ -98,3 +121,41 @@ paths:
       responses:
         '204': { description: Deleted }
         '403': { description: Item belongs to another restaurant }
+  /api/menu/{id}/recipe:
+    get:
+      tags: [Recipes]
+      summary: Recipe of a dish for the manager's own restaurant (empty lines if none)
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      responses:
+        '200':
+          description: The recipe
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Recipe' }
+        '400': { description: Malformed id }
+        '403': { description: Not a manager (admin included) or dish of another restaurant }
+        '404': { description: Unknown dish }
+    put:
+      tags: [Recipes]
+      summary: Replace the recipe of a dish for the manager's own restaurant
+      description: Works on a global dish too (the recipe stays per restaurant). Body limited to 1 MiB.
+      security: [{ bearerAuth: [] }]
+      parameters:
+        - { in: path, name: id, required: true, schema: { type: string, format: uuid } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/RecipeInput' }
+      responses:
+        '200':
+          description: The saved recipe
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Recipe' }
+        '400': { description: Invalid recipe (quantity <= 0, duplicate item, bad id, more than 50 lines) }
+        '403': { description: Not a manager (admin included) or dish of another restaurant }
+        '404': { description: Unknown dish }
+        '413': { description: Body too large }

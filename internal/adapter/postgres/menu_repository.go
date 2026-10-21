@@ -107,18 +107,6 @@ func (r *MenuRepository) GetByID(ctx context.Context, id string) (*domain.MenuIt
 	return m, err
 }
 
-func (r *MenuRepository) GetByIDs(ctx context.Context, ids []string) ([]domain.MenuItem, error) {
-	if len(ids) == 0 {
-		return nil, nil
-	}
-	rows, err := r.pool.Query(ctx, `SELECT `+itemCols+` FROM menu_items m WHERE m.id = ANY($1)`, ids)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-	return scanItems(rows)
-}
-
 func (r *MenuRepository) Create(ctx context.Context, m *domain.MenuItem) error {
 	_, err := r.pool.Exec(ctx,
 		`INSERT INTO menu_items (id, tenant_id, name, description, price_cents, category, emoji, rating, available, sort_order, ingredients, image_data_url)
@@ -169,26 +157,19 @@ func (r *MenuRepository) MaxSortOrder(ctx context.Context, scope string) (int, e
 }
 
 func (r *MenuRepository) ListByIDs(ctx context.Context, ids []string) ([]domain.MenuItem, error) {
-	rows, err := r.pool.Query(ctx, `SELECT `+selectCols+` FROM menu_items WHERE id = ANY($1)`, ids)
+	rows, err := r.pool.Query(ctx, `SELECT `+itemCols+` FROM menu_items m WHERE m.id = ANY($1)`, ids)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-
-	items := []domain.MenuItem{}
-	for rows.Next() {
-		var m domain.MenuItem
-		if err := rows.Scan(&m.ID, &m.TenantID, &m.Name, &m.Description, &m.PriceCents,
-			&m.Category, &m.Emoji, &m.Rating, &m.Available, &m.SortOrder); err != nil {
-			return nil, err
-		}
-		items = append(items, m)
-	}
-	return items, rows.Err()
+	return scanItems(rows)
 }
 
-func (r *MenuRepository) query(ctx context.Context, sql, tenantID string) ([]domain.MenuItem, error) {
-	rows, err := r.pool.Query(ctx, sql, tenantID)
+// ToggleTenantOverride hides/shows a global item for one restaurant only.
+func (r *MenuRepository) ToggleTenantOverride(ctx context.Context, tenantID, itemID string) (bool, error) {
+	tag, err := r.pool.Exec(ctx,
+		`DELETE FROM menu_item_tenant_overrides WHERE tenant_id = $1 AND menu_item_id = $2`,
+		tenantID, itemID)
 	if err != nil {
 		return false, err
 	}
