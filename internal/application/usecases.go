@@ -65,6 +65,14 @@ func (uc *UseCases) ListRestaurantMenu(ctx context.Context, restaurantID string)
 	return uc.menu.ListAvailableByTenant(ctx, restaurantID)
 }
 
+// ListRestaurantMenuPlans is the equivalent for menu plans ("formules").
+func (uc *UseCases) ListRestaurantMenuPlans(ctx context.Context, restaurantID string) ([]domain.MenuPlan, error) {
+	if restaurantID == "" {
+		return nil, domain.NewValidationError("restaurantId is required")
+	}
+	return uc.plans.ListAvailableByTenant(ctx, restaurantID)
+}
+
 // ListByIDs resolves dish ids to their details (public — used to render a
 // customer's favorited dishes, which may belong to different restaurants).
 func (uc *UseCases) ListByIDs(ctx context.Context, ids []string) ([]domain.MenuItem, error) {
