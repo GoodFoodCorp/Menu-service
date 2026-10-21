@@ -103,10 +103,11 @@ y compris pour un plat global. Un plat sans recette n'est pas suivi en stock.
 
 | Service | Type | Conséquence si `menu-service` est arrêté |
 |---|---|---|
-| `web-app` | 🟠 | Les pages de menu (client et franchisé) sont cassées ; les commandes déjà passées restent consultables |
+| `web-app` | 🟠 | Les pages de menu (client et franchisé) sont cassées, ainsi que l'édition des recettes ; les commandes déjà passées restent consultables |
+| `order-service` | 🔴 | Appelle `POST /internal/recipes/lookup` (clé `X-Service-Key`) à **chaque** création de commande pour contrôler le stock des ingrédients : **les nouvelles commandes sont refusées (`503`)** tant que `menu-service` est indisponible. La consommation de stock des commandes confirmées est différée et rejouée par le worker d'`order-service`. |
 
-`order-service` **ne l'appelle pas** : les articles commandés sont envoyés par le
-client au moment de la commande.
+Les articles commandés (nom, prix) restent envoyés par le client au moment de la
+commande ; `order-service` ne lit ici que les **recettes**.
 
 ---
 
