@@ -171,7 +171,7 @@ type recipeLineDTO struct {
 }
 
 type recipeRequest struct {
-	Lines []recipeLineDTO `json:"lines"`
+	Lines *[]recipeLineDTO `json:"lines"` // pointer: nil means the key was absent/null
 }
 
 type recipeResponse struct {
@@ -188,8 +188,8 @@ func toRecipeResponse(itemID string, lines []domain.RecipeLine) recipeResponse {
 }
 
 type recipeLookupRequest struct {
-	RestaurantID string   `json:"restaurant_id"`
-	MenuItemIDs  []string `json:"menu_item_ids"`
+	RestaurantID *string   `json:"restaurant_id"`
+	MenuItemIDs  *[]string `json:"menu_item_ids"`
 }
 
 // lookupLineDTO is the slim line Order-service needs: no display fields.

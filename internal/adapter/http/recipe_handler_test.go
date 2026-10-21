@@ -104,8 +104,28 @@ func TestPUT_recipe_manager_then_GET_returns_same_lines(t *testing.T) {
 	body := fmt.Sprintf(`{"lines":[{"stock_item_id":%q,"stock_item_name":"Farine","unit":"kg","quantity":0.25},{"stock_item_id":%q,"stock_item_name":"Oeuf","unit":"piece","quantity":2}]}`, stockFlour, stockEgg)
 
 	put := do(h, http.MethodPut, "/api/menu/"+dishWithRecipe+"/recipe", body, auth)
-	if put.Code != http.StatusOK && put.Code != http.StatusNoContent {
-		t.Fatalf("PUT: want 200/204, got %d: %s", put.Code, put.Body)
+	if put.Code != http.StatusOK {
+		t.Fatalf("PUT: want 200, got %d: %s", put.Code, put.Body)
+	}
+	var saved struct {
+		MenuItemID string `json:"menu_item_id"`
+		Lines      []struct {
+			StockItemID   string  `json:"stock_item_id"`
+			StockItemName string  `json:"stock_item_name"`
+			Unit          string  `json:"unit"`
+			Quantity      float64 `json:"quantity"`
+		} `json:"lines"`
+	}
+	if err := json.Unmarshal(put.Body.Bytes(), &saved); err != nil {
+		t.Fatal(err)
+	}
+	if saved.MenuItemID != dishWithRecipe || len(saved.Lines) != 2 ||
+		saved.Lines[0].StockItemID != stockFlour || saved.Lines[0].StockItemName != "Farine" ||
+		saved.Lines[0].Unit != "kg" || saved.Lines[0].Quantity != 0.25 || saved.Lines[1].Quantity != 2 {
+		t.Fatalf("PUT body does not echo the saved recipe: %s", put.Body)
+	}
+	if !strings.Contains(put.Body.String(), `"stock_item_id"`) || !strings.Contains(put.Body.String(), `"menu_item_id"`) {
+		t.Fatalf("PUT body must use snake_case keys: %s", put.Body)
 	}
 
 	get := do(h, http.MethodGet, "/api/menu/"+dishWithRecipe+"/recipe", "", auth)
@@ -154,12 +174,86 @@ func TestRecipe_admin_is_403_and_invalid_quantity_is_400(t *testing.T) {
 	}
 }
 
-func TestPUT_recipe_oversized_body_is_rejected(t *testing.T) {
+func TestPUT_recipe_oversized_body_is_413(t *testing.T) {
 	mgr := map[string]string{"Authorization": "Bearer " + token(t, "manager")}
-	big := `{"lines":[],"pad":"` + strings.Repeat("a", maxBodyBytes+10) + `"}`
+	big := fmt.Sprintf(`{"lines":[{"stock_item_id":%q,"stock_item_name":%q,"quantity":1}]}`, stockFlour, strings.Repeat("a", maxBodyBytes+10))
 	rec := do(newTestRouter(), http.MethodPut, "/api/menu/"+dishWithRecipe+"/recipe", big, mgr)
-	if rec.Code != http.StatusRequestEntityTooLarge && rec.Code != http.StatusBadRequest {
-		t.Fatalf("want 413/400, got %d", rec.Code)
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("want 413, got %d", rec.Code)
+	}
+}
+
+func TestInternal_lookup_oversized_body_is_413(t *testing.T) {
+	big := lookupBody(restaurantA, strings.Repeat("a", maxBodyBytes+10))
+	rec := do(newTestRouter(), http.MethodPost, "/internal/recipes/lookup", big, map[string]string{"X-Service-Key": testServiceKey})
+	if rec.Code != http.StatusRequestEntityTooLarge {
+		t.Fatalf("want 413, got %d", rec.Code)
+	}
+}
+
+func TestPUT_recipe_strict_body_decoding(t *testing.T) {
+	h := newTestRouter()
+	seedRecipe(t, h)
+	mgr := map[string]string{"Authorization": "Bearer " + token(t, "manager")}
+	path := "/api/menu/" + dishWithRecipe + "/recipe"
+	for name, body := range map[string]string{
+		"misspelled lines": `{"line":[]}`,
+		"unknown field":    `{"lines":[],"extra":1}`,
+		"empty object":     `{}`,
+		"null lines":       `{"lines":null}`,
+		"trailing garbage": `{"lines":[]} garbage`,
+		"second object":    `{"lines":[]}{"lines":[]}`,
+	} {
+		if rec := do(h, http.MethodPut, path, body, mgr); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: want 400, got %d", name, rec.Code)
+		}
+	}
+	// None of the rejected requests may have deleted the recipe.
+	get := do(h, http.MethodGet, path, "", mgr)
+	if !strings.Contains(get.Body.String(), stockFlour) {
+		t.Fatalf("recipe was lost after rejected PUTs: %s", get.Body)
+	}
+	// An explicit empty array still deletes it.
+	if rec := do(h, http.MethodPut, path, `{"lines":[]}`, mgr); rec.Code != http.StatusOK {
+		t.Fatalf("delete: want 200, got %d", rec.Code)
+	}
+	if get := do(h, http.MethodGet, path, "", mgr); !strings.Contains(get.Body.String(), `"lines":[]`) {
+		t.Fatalf("want empty lines after delete, got %s", get.Body)
+	}
+}
+
+func TestInternal_lookup_strict_body_decoding(t *testing.T) {
+	h := newTestRouter()
+	key := map[string]string{"X-Service-Key": testServiceKey}
+	for name, body := range map[string]string{
+		"unknown field":         fmt.Sprintf(`{"restaurant_id":%q,"menu_item_ids":[],"x":1}`, restaurantA),
+		"misspelled ids":        fmt.Sprintf(`{"restaurant_id":%q,"menu_item_id":[%q]}`, restaurantA, dishWithRecipe),
+		"missing restaurant_id": fmt.Sprintf(`{"menu_item_ids":[%q]}`, dishWithRecipe),
+		"null menu_item_ids":    fmt.Sprintf(`{"restaurant_id":%q,"menu_item_ids":null}`, restaurantA),
+		"trailing garbage":      lookupBody(restaurantA, dishWithRecipe) + "x",
+	} {
+		if rec := do(h, http.MethodPost, "/internal/recipes/lookup", body, key); rec.Code != http.StatusBadRequest {
+			t.Errorf("%s: want 400, got %d", name, rec.Code)
+		}
+	}
+	// An explicit empty list is valid.
+	if rec := do(h, http.MethodPost, "/internal/recipes/lookup", fmt.Sprintf(`{"restaurant_id":%q,"menu_item_ids":[]}`, restaurantA), key); rec.Code != http.StatusOK {
+		t.Errorf("empty list: want 200, got %d", rec.Code)
+	}
+}
+
+func TestRecipe_admin_PUT_is_403_and_malformed_id_is_400(t *testing.T) {
+	h := newTestRouter()
+	admin := map[string]string{"Authorization": "Bearer " + token(t, "admin")}
+	if rec := do(h, http.MethodPut, "/api/menu/"+dishWithRecipe+"/recipe", `{"lines":[]}`, admin); rec.Code != http.StatusForbidden {
+		t.Errorf("admin PUT: want 403, got %d", rec.Code)
+	}
+	mgr := map[string]string{"Authorization": "Bearer " + token(t, "manager")}
+	if rec := do(h, http.MethodGet, "/api/menu/not-a-uuid/recipe", "", mgr); rec.Code != http.StatusBadRequest {
+		t.Errorf("GET malformed id: want 400, got %d", rec.Code)
+	}
+	if rec := do(h, http.MethodPut, "/api/menu/not-a-uuid/recipe", `{"lines":[]}`, mgr); rec.Code != http.StatusBadRequest {
+		t.Errorf("PUT malformed id: want 400, got %d", rec.Code)
 	}
 }
 
@@ -168,7 +262,7 @@ func seedRecipe(t *testing.T, h http.Handler) {
 	body := fmt.Sprintf(`{"lines":[{"stock_item_id":%q,"quantity":1.5}]}`, stockFlour)
 	rec := do(h, http.MethodPut, "/api/menu/"+dishWithRecipe+"/recipe", body,
 		map[string]string{"Authorization": "Bearer " + token(t, "manager")})
-	if rec.Code >= 300 {
+	if rec.Code != http.StatusOK {
 		t.Fatalf("seed failed: %d %s", rec.Code, rec.Body)
 	}
 }

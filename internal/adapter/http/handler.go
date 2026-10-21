@@ -3,6 +3,7 @@ package http
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"net/http"
 	"strings"
 
@@ -23,7 +24,19 @@ const (
 // error response (413 / 400) itself, returning false when it did.
 func decodeLimitedJSON(w http.ResponseWriter, r *http.Request, v any) bool {
 	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
-	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+	dec := json.NewDecoder(r.Body)
+	dec.DisallowUnknownFields()
+	err := dec.Decode(v)
+	if err == nil {
+		// Reject trailing data after the JSON value (a second read must hit EOF).
+		var extra json.RawMessage
+		if err = dec.Decode(&extra); err == nil {
+			err = errors.New("unexpected data after JSON body")
+		} else if errors.Is(err, io.EOF) {
+			err = nil
+		}
+	}
+	if err != nil {
 		var tooBig *http.MaxBytesError
 		if errors.As(err, &tooBig) {
 			writeError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
@@ -152,8 +165,13 @@ func (h *MenuHandler) SetRecipe(w http.ResponseWriter, r *http.Request) {
 	if !decodeLimitedJSON(w, r, &req) {
 		return
 	}
-	lines := make([]domain.RecipeLine, 0, len(req.Lines))
-	for _, l := range req.Lines {
+	// A missing "lines" must not be mistaken for "delete the recipe".
+	if req.Lines == nil {
+		writeError(w, r, http.StatusBadRequest, "lines is required (use [] to delete the recipe)")
+		return
+	}
+	lines := make([]domain.RecipeLine, 0, len(*req.Lines))
+	for _, l := range *req.Lines {
 		lines = append(lines, domain.RecipeLine{StockItemID: l.StockItemID, StockItemName: l.StockItemName, Unit: l.Unit, Quantity: l.Quantity})
 	}
 	id := chi.URLParam(r, "id")
@@ -176,11 +194,15 @@ func (h *MenuHandler) LookupRecipes(w http.ResponseWriter, r *http.Request) {
 	if !decodeLimitedJSON(w, r, &req) {
 		return
 	}
-	if len(req.MenuItemIDs) > maxLookupItemIDs {
+	if req.RestaurantID == nil || req.MenuItemIDs == nil {
+		writeError(w, r, http.StatusBadRequest, "restaurant_id and menu_item_ids are required")
+		return
+	}
+	if len(*req.MenuItemIDs) > maxLookupItemIDs {
 		writeError(w, r, http.StatusBadRequest, "too many menu_item_ids")
 		return
 	}
-	recipes, err := h.uc.LookupRecipes(r.Context(), req.RestaurantID, req.MenuItemIDs)
+	recipes, err := h.uc.LookupRecipes(r.Context(), *req.RestaurantID, *req.MenuItemIDs)
 	if err != nil {
 		writeDomainError(w, r, err)
 		return
