@@ -52,6 +52,7 @@ func main() {
 	router := httpadapter.NewRouter(
 		httpadapter.NewMenuHandler(uc),
 		cfg.JWTSecret,
+		cfg.ServiceAPIKey,
 		log,
 		func(ctx context.Context) error { return pool.Ping(ctx) },
 	)

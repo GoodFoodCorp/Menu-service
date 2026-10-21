@@ -9,6 +9,7 @@ type Config struct {
 	Port                string
 	DatabaseURL         string
 	JWTSecret           string
+	ServiceAPIKey       string
 	FranchiseServiceURL string
 	LogLevel            string
 }
@@ -19,6 +20,7 @@ func Load() (*Config, error) {
 		Port:                getEnv("PORT", "8085"),
 		DatabaseURL:         os.Getenv("DATABASE_URL"),
 		JWTSecret:           os.Getenv("JWT_SECRET"),
+		ServiceAPIKey:       os.Getenv("SERVICE_API_KEY"),
 		FranchiseServiceURL: getEnv("FRANCHISE_SERVICE_URL", "http://franchise-service:8089"),
 		LogLevel:            getEnv("LOG_LEVEL", "info"),
 	}
@@ -27,6 +29,9 @@ func Load() (*Config, error) {
 	}
 	if cfg.JWTSecret == "" {
 		return nil, fmt.Errorf("JWT_SECRET is required")
+	}
+	if cfg.ServiceAPIKey == "" {
+		return nil, fmt.Errorf("SERVICE_API_KEY is required")
 	}
 	return cfg, nil
 }

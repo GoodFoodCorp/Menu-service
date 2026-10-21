@@ -67,7 +67,23 @@ Toute tentative renvoie `403`.
 | POST | `/api/menu` | `manager` (crée dans son restaurant) |
 | PATCH | `/api/menu/{id}` | `manager` (le sien uniquement) |
 | DELETE | `/api/menu/{id}` | `manager` (le sien uniquement) |
+| GET | `/api/menu/{id}/recipe` | `manager` (recette de son restaurant ; `lines` vide si aucune) |
+| PUT | `/api/menu/{id}/recipe` | `manager` (remplace la recette ; `lines` vide la supprime ; `admin` → 403) |
+| POST | `/internal/recipes/lookup` | interne, en-tête `X-Service-Key` (voir ci-dessous) |
 | GET | `/healthz`, `/readyz` | public (sondes) |
+
+### Recettes et route interne
+
+Une recette lie un plat à des articles de stock (`stock_item_id`, quantité par plat,
+3 décimales, > 0, sans doublon, 50 lignes max). Elle est **propre à chaque restaurant**,
+y compris pour un plat global. Un plat sans recette n'est pas suivi en stock.
+
+`POST /internal/recipes/lookup` (appelé par `order-service`) :
+`{"restaurant_id","menu_item_ids":[…]}` (200 ids max) →
+`{"recipes":{"<menu_item_id>":[{"stock_item_id","quantity"}]}}`, les plats sans recette
+étant absents. Cette route est volontairement **hors `/api`** : l'ingress ne route que
+`/api/...`, elle reste donc interne au cluster. Elle exige l'en-tête `X-Service-Key`
+égal à `SERVICE_API_KEY` (401 sinon) ; elle n'est pas dans l'OpenAPI public.
 
 ---
 
@@ -98,7 +114,7 @@ client au moment de la commande.
 
 ```bash
 docker network create microservices-net   # une seule fois, partagé
-cp .env.example .env                      # renseigner POSTGRES_PASSWORD et JWT_SECRET
+cp .env.example .env                      # renseigner POSTGRES_PASSWORD, JWT_SECRET et SERVICE_API_KEY
 docker compose up -d --build
 ```
 
@@ -113,6 +129,7 @@ docker compose up -d --build
 | `POSTGRES_USER` / `POSTGRES_PASSWORD` / `POSTGRES_DB` | oui | Base dédiée `menu-db` |
 | `DATABASE_URL` | oui | Chaîne pgx (le compose la construit pour le conteneur) |
 | `JWT_SECRET` | oui | Secret HS256 partagé avec `auth-service` |
+| `SERVICE_API_KEY` | oui | Secret des appels internes (`X-Service-Key`), partagé avec `order-service` et `stock-service` ; le service refuse de démarrer sans |
 | `FRANCHISE_SERVICE_URL` | non | Défaut `http://franchise-service:8089` (seed) |
 | `LOG_LEVEL` | non (info) | `debug`, `info`, `warn`, `error` |
 

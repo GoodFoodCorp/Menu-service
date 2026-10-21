@@ -2,6 +2,7 @@ package http
 
 import (
 	"context"
+	"crypto/subtle"
 	"fmt"
 	"net/http"
 	"strings"
@@ -17,9 +18,10 @@ import (
 type contextKey string
 
 const (
-	ctxKeyActor     contextKey = "actor"
-	ctxKeyRequestID contextKey = "request_id"
-	headerRequestID            = "X-Request-ID"
+	ctxKeyActor      contextKey = "actor"
+	ctxKeyRequestID  contextKey = "request_id"
+	headerRequestID             = "X-Request-ID"
+	headerServiceKey            = "X-Service-Key"
 )
 
 func RequestID(next http.Handler) http.Handler {
@@ -112,4 +114,22 @@ func Auth(jwtSecret string) func(http.Handler) http.Handler {
 func actorFrom(r *http.Request) application.Actor {
 	actor, _ := r.Context().Value(ctxKeyActor).(application.Actor)
 	return actor
+}
+
+// ServiceKey guards internal service-to-service routes: the X-Service-Key
+// header must equal the shared secret (constant-time compare). It fails
+// closed: an empty configured key rejects every request. The key is never
+// logged or echoed.
+func ServiceKey(key string) func(http.Handler) http.Handler {
+	expected := []byte(key)
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			provided := []byte(r.Header.Get(headerServiceKey))
+			if len(expected) == 0 || subtle.ConstantTimeCompare(provided, expected) != 1 {
+				writeError(w, r, http.StatusUnauthorized, "invalid or missing service key")
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }

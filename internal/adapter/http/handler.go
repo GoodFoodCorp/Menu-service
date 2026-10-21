@@ -2,13 +2,38 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/go-chi/chi/v5"
 
 	"goodfood/menu-service/internal/application"
+	"goodfood/menu-service/internal/domain"
 )
+
+const (
+	// maxBodyBytes caps the JSON body of the recipe PUT and the lookup.
+	maxBodyBytes = 1 << 20 // 1 MiB
+	// maxLookupItemIDs bounds how many dishes one lookup may ask for.
+	maxLookupItemIDs = 200
+)
+
+// decodeLimitedJSON decodes a size-capped JSON body into v and writes the
+// error response (413 / 400) itself, returning false when it did.
+func decodeLimitedJSON(w http.ResponseWriter, r *http.Request, v any) bool {
+	r.Body = http.MaxBytesReader(w, r.Body, maxBodyBytes)
+	if err := json.NewDecoder(r.Body).Decode(v); err != nil {
+		var tooBig *http.MaxBytesError
+		if errors.As(err, &tooBig) {
+			writeError(w, r, http.StatusRequestEntityTooLarge, "request body too large")
+			return false
+		}
+		writeError(w, r, http.StatusBadRequest, "invalid JSON body")
+		return false
+	}
+	return true
+}
 
 // MenuHandler holds the HTTP endpoints. Handlers only decode/validate DTOs,
 // call the application layer and encode responses — no business logic here.
@@ -106,6 +131,61 @@ func (h *MenuHandler) ToggleAvailability(w http.ResponseWriter, r *http.Request)
 		return
 	}
 	writeJSON(w, http.StatusOK, toResponse(item))
+}
+
+// ── Recipes (per-restaurant dish composition for stock tracking) ─────────
+
+// GET /api/menu/{id}/recipe  (manager — own restaurant's recipe, empty if none)
+func (h *MenuHandler) GetRecipe(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	lines, err := h.uc.GetRecipe(r.Context(), actorFrom(r), id)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toRecipeResponse(id, lines))
+}
+
+// PUT /api/menu/{id}/recipe  (manager — replaces the recipe; empty lines delete it)
+func (h *MenuHandler) SetRecipe(w http.ResponseWriter, r *http.Request) {
+	var req recipeRequest
+	if !decodeLimitedJSON(w, r, &req) {
+		return
+	}
+	lines := make([]domain.RecipeLine, 0, len(req.Lines))
+	for _, l := range req.Lines {
+		lines = append(lines, domain.RecipeLine{StockItemID: l.StockItemID, StockItemName: l.StockItemName, Unit: l.Unit, Quantity: l.Quantity})
+	}
+	id := chi.URLParam(r, "id")
+	if err := h.uc.SetRecipe(r.Context(), actorFrom(r), id, lines); err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	saved, err := h.uc.GetRecipe(r.Context(), actorFrom(r), id)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toRecipeResponse(id, saved))
+}
+
+// POST /internal/recipes/lookup  (service key — Order-service resolves the
+// recipes of a restaurant's dishes; untracked dishes are absent)
+func (h *MenuHandler) LookupRecipes(w http.ResponseWriter, r *http.Request) {
+	var req recipeLookupRequest
+	if !decodeLimitedJSON(w, r, &req) {
+		return
+	}
+	if len(req.MenuItemIDs) > maxLookupItemIDs {
+		writeError(w, r, http.StatusBadRequest, "too many menu_item_ids")
+		return
+	}
+	recipes, err := h.uc.LookupRecipes(r.Context(), req.RestaurantID, req.MenuItemIDs)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toLookupResponse(recipes))
 }
 
 // ── Menus ("formules" — bundles of dishes) ──────────────────────────────

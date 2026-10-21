@@ -163,6 +163,57 @@ func toCategoryResponseList(categories []domain.Category) []categoryResponse {
 	return out
 }
 
+type recipeLineDTO struct {
+	StockItemID   string  `json:"stock_item_id"`
+	StockItemName string  `json:"stock_item_name"`
+	Unit          string  `json:"unit"`
+	Quantity      float64 `json:"quantity"`
+}
+
+type recipeRequest struct {
+	Lines []recipeLineDTO `json:"lines"`
+}
+
+type recipeResponse struct {
+	MenuItemID string          `json:"menu_item_id"`
+	Lines      []recipeLineDTO `json:"lines"`
+}
+
+func toRecipeResponse(itemID string, lines []domain.RecipeLine) recipeResponse {
+	out := make([]recipeLineDTO, 0, len(lines))
+	for _, l := range lines {
+		out = append(out, recipeLineDTO{StockItemID: l.StockItemID, StockItemName: l.StockItemName, Unit: l.Unit, Quantity: l.Quantity})
+	}
+	return recipeResponse{MenuItemID: itemID, Lines: out}
+}
+
+type recipeLookupRequest struct {
+	RestaurantID string   `json:"restaurant_id"`
+	MenuItemIDs  []string `json:"menu_item_ids"`
+}
+
+// lookupLineDTO is the slim line Order-service needs: no display fields.
+type lookupLineDTO struct {
+	StockItemID string  `json:"stock_item_id"`
+	Quantity    float64 `json:"quantity"`
+}
+
+type recipeLookupResponse struct {
+	Recipes map[string][]lookupLineDTO `json:"recipes"`
+}
+
+func toLookupResponse(recipes map[string][]domain.RecipeLine) recipeLookupResponse {
+	out := make(map[string][]lookupLineDTO, len(recipes))
+	for itemID, lines := range recipes {
+		dto := make([]lookupLineDTO, 0, len(lines))
+		for _, l := range lines {
+			dto = append(dto, lookupLineDTO{StockItemID: l.StockItemID, Quantity: l.Quantity})
+		}
+		out[itemID] = dto
+	}
+	return recipeLookupResponse{Recipes: out}
+}
+
 type errorResponse struct {
 	Error     string `json:"error"`
 	RequestID string `json:"request_id,omitempty"`
