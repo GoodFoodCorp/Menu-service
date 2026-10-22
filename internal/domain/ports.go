@@ -65,4 +65,8 @@ type RecipeRepository interface {
 	// Lookup returns the recipes of several dishes for one restaurant, keyed
 	// by dish id; dishes without a recipe are absent.
 	Lookup(ctx context.Context, tenantID string, itemIDs []string) (map[string][]RecipeLine, error)
+	// DishesUsingStockItems returns, for one restaurant, the names of the
+	// dishes whose recipe uses each given stock item, keyed by stock item id;
+	// stock items used by no dish are absent.
+	DishesUsingStockItems(ctx context.Context, tenantID string, stockItemIDs []string) (map[string][]string, error)
 }

@@ -47,6 +47,22 @@ func (f *fakeRecipeRepo) Lookup(_ context.Context, tenantID string, itemIDs []st
 	return out, nil
 }
 
+func (f *fakeRecipeRepo) DishesUsingStockItems(_ context.Context, tenantID string, stockItemIDs []string) (map[string][]string, error) {
+	want := map[string]bool{}
+	for _, id := range stockItemIDs {
+		want[id] = true
+	}
+	out := map[string][]string{}
+	for itemID, lines := range f.data[tenantID] {
+		for _, l := range lines {
+			if want[l.StockItemID] {
+				out[l.StockItemID] = append(out[l.StockItemID], itemID)
+			}
+		}
+	}
+	return out, nil
+}
+
 func newRecipeUC() (*UseCases, *fakeRepo, *fakeRecipeRepo) {
 	menu, recipes := newFakeRepo(), newFakeRecipeRepo()
 	return NewUseCases(menu, newFakePlanRepo(), newFakeCategoryRepo(), recipes), menu, recipes
@@ -286,5 +302,24 @@ func TestRecipes_reject_malformed_ids(t *testing.T) {
 	assert.Equal(t, domain.ErrCodeValidation, errCode(t, err))
 	badTenant := Actor{UserID: "m", TenantID: "nope", RoleSlugs: []string{RoleManager}}
 	_, err = uc.GetRecipe(ctx, badTenant, item.ID)
+	assert.Equal(t, domain.ErrCodeValidation, errCode(t, err))
+}
+
+func TestStockItemUsage_reports_used_items_and_validates_ids(t *testing.T) {
+	uc, _, _ := newRecipeUC()
+	ctx := context.Background()
+	const used = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+	const unused = "cccccccc-cccc-cccc-cccc-cccccccccccc"
+	item, _ := uc.CreateItem(ctx, managerA, validInput("Burger"))
+	require.NoError(t, uc.SetRecipe(ctx, managerA, item.ID, []domain.RecipeLine{line(used, 1)}))
+
+	got, err := uc.StockItemUsage(ctx, restaurantA, []string{used, unused})
+	require.NoError(t, err)
+	assert.Len(t, got[used], 1)
+	assert.NotContains(t, got, unused)
+
+	_, err = uc.StockItemUsage(ctx, restaurantA, []string{"not-a-uuid"})
+	assert.Equal(t, domain.ErrCodeValidation, errCode(t, err))
+	_, err = uc.StockItemUsage(ctx, "", []string{used})
 	assert.Equal(t, domain.ErrCodeValidation, errCode(t, err))
 }

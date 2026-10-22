@@ -87,3 +87,27 @@ func (uc *UseCases) LookupRecipes(ctx context.Context, restaurantID string, item
 	}
 	return uc.recipes.Lookup(ctx, restaurantID, ids)
 }
+
+// StockItemUsage returns, for a restaurant, the names of the dishes whose
+// recipe uses each stock item (internal use by Stock-service, to refuse
+// deleting or rewriting an article a recipe depends on); unused stock items
+// are omitted.
+func (uc *UseCases) StockItemUsage(ctx context.Context, restaurantID string, stockItemIDs []string) (map[string][]string, error) {
+	if restaurantID == "" {
+		return nil, domain.NewValidationError("restaurantId is required")
+	}
+	restaurantID, err := domain.NormalizeUUID("restaurantId", restaurantID)
+	if err != nil {
+		return nil, err
+	}
+	ids := make([]string, len(stockItemIDs))
+	for i, id := range stockItemIDs {
+		if ids[i], err = domain.NormalizeUUID("stock item id", id); err != nil {
+			return nil, err
+		}
+	}
+	if len(ids) == 0 {
+		return map[string][]string{}, nil
+	}
+	return uc.recipes.DishesUsingStockItems(ctx, restaurantID, ids)
+}

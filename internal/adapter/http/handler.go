@@ -210,6 +210,29 @@ func (h *MenuHandler) LookupRecipes(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toLookupResponse(recipes))
 }
 
+// POST /internal/recipes/usage  (service key — Stock-service asks which dishes
+// of a restaurant use given stock items; unused stock items are absent)
+func (h *MenuHandler) StockItemUsage(w http.ResponseWriter, r *http.Request) {
+	var req stockUsageRequest
+	if !decodeLimitedJSON(w, r, &req) {
+		return
+	}
+	if req.RestaurantID == nil || req.StockItemIDs == nil {
+		writeError(w, r, http.StatusBadRequest, "restaurant_id and stock_item_ids are required")
+		return
+	}
+	if len(*req.StockItemIDs) > maxLookupItemIDs {
+		writeError(w, r, http.StatusBadRequest, "too many stock_item_ids")
+		return
+	}
+	usage, err := h.uc.StockItemUsage(r.Context(), *req.RestaurantID, *req.StockItemIDs)
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, stockUsageResponse{Usage: usage})
+}
+
 // ── Menus ("formules" — bundles of dishes) ──────────────────────────────
 
 // GET /api/menu-plans?restaurantId=<tenantId>  (public — customer browsing)

@@ -80,4 +80,31 @@ func (r *RecipeRepository) Lookup(ctx context.Context, tenantID string, itemIDs 
 	return out, rows.Err()
 }
 
+// DishesUsingStockItems returns the distinct names of the dishes whose recipe
+// (in this restaurant) uses each stock item, keyed by stock item id.
+func (r *RecipeRepository) DishesUsingStockItems(ctx context.Context, tenantID string, stockItemIDs []string) (map[string][]string, error) {
+	out := map[string][]string{}
+	if len(stockItemIDs) == 0 {
+		return out, nil
+	}
+	rows, err := r.pool.Query(ctx,
+		`SELECT rec.stock_item_id::text, mi.name
+		 FROM menu_item_recipes rec
+		 JOIN menu_items mi ON mi.id = rec.menu_item_id
+		 WHERE rec.tenant_id = $1 AND rec.stock_item_id = ANY($2::text[]::uuid[])
+		 ORDER BY rec.stock_item_id, mi.name`, tenantID, stockItemIDs)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var stockItemID, dish string
+		if err := rows.Scan(&stockItemID, &dish); err != nil {
+			return nil, err
+		}
+		out[stockItemID] = append(out[stockItemID], dish)
+	}
+	return out, rows.Err()
+}
+
 var _ domain.RecipeRepository = (*RecipeRepository)(nil)

@@ -63,6 +63,10 @@ func (f *fakeRecipeRepo) Lookup(_ context.Context, tenantID string, itemIDs []st
 	return out, nil
 }
 
+func (f *fakeRecipeRepo) DishesUsingStockItems(_ context.Context, _ string, _ []string) (map[string][]string, error) {
+	return map[string][]string{}, nil
+}
+
 func newTestRouter() http.Handler {
 	uc := application.NewUseCases(fakeMenuRepo{}, nil, nil, &fakeRecipeRepo{data: map[string][]domain.RecipeLine{}})
 	return NewRouter(NewMenuHandler(uc), testJWTSecret, testServiceKey, zerolog.Nop(),

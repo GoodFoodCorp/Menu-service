@@ -91,6 +91,7 @@ func NewRouter(handler *MenuHandler, jwtSecret, serviceKey string, log zerolog.L
 	r.Route("/internal", func(r chi.Router) {
 		r.Use(ServiceKey(serviceKey))
 		r.Post("/recipes/lookup", handler.LookupRecipes)
+		r.Post("/recipes/usage", handler.StockItemUsage)
 	})
 
 	return r

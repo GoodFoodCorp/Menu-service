@@ -214,6 +214,15 @@ func toLookupResponse(recipes map[string][]domain.RecipeLine) recipeLookupRespon
 	return recipeLookupResponse{Recipes: out}
 }
 
+type stockUsageRequest struct {
+	RestaurantID *string   `json:"restaurant_id"`
+	StockItemIDs *[]string `json:"stock_item_ids"`
+}
+
+type stockUsageResponse struct {
+	Usage map[string][]string `json:"usage"`
+}
+
 type errorResponse struct {
 	Error     string `json:"error"`
 	RequestID string `json:"request_id,omitempty"`
