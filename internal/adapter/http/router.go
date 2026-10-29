@@ -12,7 +12,11 @@ import (
 
 type HealthChecker func(ctx context.Context) error
 
-func NewRouter(handler *MenuHandler, jwtSecret, serviceKey string, log zerolog.Logger, dbCheck HealthChecker) http.Handler {
+// publicCacheSeconds is how long the public catalogue may be cached: menus
+// change rarely, and a dish made unavailable is refused at checkout anyway.
+const publicCacheSeconds = 30
+
+func NewRouter(handler *MenuHandler, jwtCfg JWTConfig, serviceKey string, log zerolog.Logger, dbCheck HealthChecker) http.Handler {
 	r := chi.NewRouter()
 
 	r.Use(chimw.Recoverer)
@@ -43,12 +47,12 @@ func NewRouter(handler *MenuHandler, jwtSecret, serviceKey string, log zerolog.L
 
 	r.Route("/api/menu", func(r chi.Router) {
 		// Public catalog for customers (browse a restaurant's dishes)
-		r.Get("/", handler.ListPublic)
-		r.Get("/by-ids", handler.ListByIDs)
+		r.With(PublicCache(publicCacheSeconds)).Get("/", handler.ListPublic)
+		r.With(PublicCache(publicCacheSeconds)).Get("/by-ids", handler.ListByIDs)
 
 		// Manager (own restaurant) / admin (global catalog) management
 		r.Group(func(r chi.Router) {
-			r.Use(Auth(jwtSecret))
+			r.Use(Auth(jwtCfg))
 			r.Get("/manage", handler.ListMine)
 			r.Post("/", handler.Create)
 			r.Patch("/{id}", handler.Update)
@@ -61,11 +65,11 @@ func NewRouter(handler *MenuHandler, jwtSecret, serviceKey string, log zerolog.L
 
 	r.Route("/api/menu-categories", func(r chi.Router) {
 		// Public — every dish form (franchisee or admin) needs the list
-		r.Get("/", handler.ListCategories)
+		r.With(PublicCache(publicCacheSeconds)).Get("/", handler.ListCategories)
 
 		// Head office only
 		r.Group(func(r chi.Router) {
-			r.Use(Auth(jwtSecret))
+			r.Use(Auth(jwtCfg))
 			r.Post("/", handler.CreateCategory)
 			r.Delete("/{id}", handler.DeleteCategory)
 		})
@@ -73,11 +77,11 @@ func NewRouter(handler *MenuHandler, jwtSecret, serviceKey string, log zerolog.L
 
 	r.Route("/api/menu-plans", func(r chi.Router) {
 		// Public catalog for customers (browse a restaurant's menus/formules)
-		r.Get("/", handler.ListPlansPublic)
+		r.With(PublicCache(publicCacheSeconds)).Get("/", handler.ListPlansPublic)
 
 		// Manager (own restaurant) / admin (global catalog) management
 		r.Group(func(r chi.Router) {
-			r.Use(Auth(jwtSecret))
+			r.Use(Auth(jwtCfg))
 			r.Get("/manage", handler.ListPlansMine)
 			r.Post("/", handler.CreatePlan)
 			r.Patch("/{id}", handler.UpdatePlan)
