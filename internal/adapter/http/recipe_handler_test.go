@@ -69,7 +69,7 @@ func (f *fakeRecipeRepo) DishesUsingStockItems(_ context.Context, _ string, _ []
 
 func newTestRouter() http.Handler {
 	uc := application.NewUseCases(fakeMenuRepo{}, nil, nil, &fakeRecipeRepo{data: map[string][]domain.RecipeLine{}})
-	return NewRouter(NewMenuHandler(uc), testJWTSecret, testServiceKey, zerolog.Nop(),
+	return NewRouter(NewMenuHandler(uc), JWTConfig{Secret: testJWTSecret, Issuer: "goodfood-auth", Audience: "goodfood-api"}, testServiceKey, zerolog.Nop(),
 		func(context.Context) error { return nil })
 }
 
@@ -77,6 +77,7 @@ func token(t *testing.T, role string) string {
 	t.Helper()
 	tok, err := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.MapClaims{
 		"sub": "user-1", "tenant_id": restaurantA, "role_slugs": []string{role},
+		"typ": "access", "iss": "goodfood-auth", "aud": "goodfood-api",
 		"exp": time.Now().Add(time.Hour).Unix(),
 	}).SignedString([]byte(testJWTSecret))
 	if err != nil {
