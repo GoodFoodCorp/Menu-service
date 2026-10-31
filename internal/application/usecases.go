@@ -64,6 +64,10 @@ func (uc *UseCases) ListRestaurantMenu(ctx context.Context, restaurantID string)
 	if restaurantID == "" {
 		return nil, domain.NewValidationError("restaurantId is required")
 	}
+	restaurantID, err := domain.NormalizeUUID("restaurantId", restaurantID)
+	if err != nil {
+		return nil, err
+	}
 	return uc.menu.ListAvailableByTenant(ctx, restaurantID)
 }
 
@@ -71,6 +75,10 @@ func (uc *UseCases) ListRestaurantMenu(ctx context.Context, restaurantID string)
 func (uc *UseCases) ListRestaurantMenuPlans(ctx context.Context, restaurantID string) ([]domain.MenuPlan, error) {
 	if restaurantID == "" {
 		return nil, domain.NewValidationError("restaurantId is required")
+	}
+	restaurantID, err := domain.NormalizeUUID("restaurantId", restaurantID)
+	if err != nil {
+		return nil, err
 	}
 	return uc.plans.ListAvailableByTenant(ctx, restaurantID)
 }
