@@ -85,7 +85,55 @@ func (uc *UseCases) LookupRecipes(ctx context.Context, restaurantID string, item
 	if len(ids) == 0 {
 		return map[string][]domain.RecipeLine{}, nil
 	}
-	return uc.recipes.Lookup(ctx, restaurantID, ids)
+	recipes, err := uc.recipes.Lookup(ctx, restaurantID, ids)
+	if err != nil {
+		return nil, err
+	}
+	return uc.withFormuleRecipes(ctx, restaurantID, ids, recipes)
+}
+
+// withFormuleRecipes gives each ordered formule the recipe of its dishes, so
+// that selling a formule consumes (and checks) the same stock as selling its
+// dishes one by one.
+func (uc *UseCases) withFormuleRecipes(ctx context.Context, restaurantID string, ids []string, recipes map[string][]domain.RecipeLine) (map[string][]domain.RecipeLine, error) {
+	wanted := map[string]bool{}
+	for _, id := range ids {
+		if _, ok := recipes[id]; !ok {
+			wanted[id] = true
+		}
+	}
+	if len(wanted) == 0 || uc.plans == nil {
+		return recipes, nil
+	}
+	plans, err := uc.plans.ListAvailableByTenant(ctx, restaurantID)
+	if err != nil {
+		return nil, err
+	}
+	var formules []domain.MenuPlan
+	var dishIDs []string
+	for _, p := range plans {
+		if wanted[p.ID] {
+			formules = append(formules, p)
+			dishIDs = append(dishIDs, p.DishIDs...)
+		}
+	}
+	if len(formules) == 0 {
+		return recipes, nil
+	}
+	dishRecipes, err := uc.recipes.Lookup(ctx, restaurantID, dishIDs)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range formules {
+		parts := make([][]domain.RecipeLine, 0, len(p.DishIDs))
+		for _, dishID := range p.DishIDs {
+			parts = append(parts, dishRecipes[dishID])
+		}
+		if lines := domain.SumRecipes(parts...); len(lines) > 0 {
+			recipes[p.ID] = lines
+		}
+	}
+	return recipes, nil
 }
 
 // StockItemUsage returns, for a restaurant, the names of the dishes whose

@@ -35,6 +35,24 @@ type RecipeLine struct {
 	Quantity      float64
 }
 
+// SumRecipes adds up several recipes, one line per stock item: what a
+// formule consumes is what its dishes consume.
+func SumRecipes(recipes ...[]RecipeLine) []RecipeLine {
+	var out []RecipeLine
+	index := map[string]int{}
+	for _, recipe := range recipes {
+		for _, l := range recipe {
+			if i, ok := index[l.StockItemID]; ok {
+				out[i].Quantity = RoundQuantity(out[i].Quantity + l.Quantity)
+				continue
+			}
+			index[l.StockItemID] = len(out)
+			out = append(out, l)
+		}
+	}
+	return out
+}
+
 // RoundQuantity rounds a quantity to the 3 decimals the storage keeps.
 func RoundQuantity(q float64) float64 {
 	return math.Round(q*1000) / 1000

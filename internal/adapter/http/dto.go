@@ -16,6 +16,7 @@ type menuItemRequest struct {
 	Emoji        string   `json:"emoji"`
 	Available    *bool    `json:"available"`
 	Ingredients  []string `json:"ingredients"`
+	Allergens    []string `json:"allergens"`
 	ImageDataURL string   `json:"image_data_url"`
 }
 
@@ -32,6 +33,7 @@ func (req menuItemRequest) toInput() domain.MenuItemInput {
 		Emoji:        req.Emoji,
 		Available:    available,
 		Ingredients:  req.Ingredients,
+		Allergens:    req.Allergens,
 		ImageDataURL: req.ImageDataURL,
 	}
 }
@@ -47,6 +49,7 @@ type menuItemResponse struct {
 	Rating          float64  `json:"rating"`
 	Available       bool     `json:"available"`
 	Ingredients     []string `json:"ingredients"`
+	Allergens       []string `json:"allergens"`
 	IsGlobal        bool     `json:"is_global"`
 	HiddenForViewer bool     `json:"hidden_for_viewer"`
 	ImageDataURL    string   `json:"image_data_url"`
@@ -64,6 +67,7 @@ func toResponse(m *domain.MenuItem) menuItemResponse {
 		Rating:          m.Rating,
 		Available:       m.Available,
 		Ingredients:     m.Ingredients,
+		Allergens:       allergensOrEmpty(m.Allergens),
 		IsGlobal:        m.IsGlobal(),
 		HiddenForViewer: m.HiddenForViewer,
 		ImageDataURL:    m.ImageDataURL,
@@ -254,4 +258,12 @@ func writeDomainError(w http.ResponseWriter, r *http.Request, err error) {
 		return
 	}
 	writeError(w, r, http.StatusInternalServerError, "internal server error")
+}
+
+// allergensOrEmpty answers [] rather than null for a dish without allergens.
+func allergensOrEmpty(a []string) []string {
+	if a == nil {
+		return []string{}
+	}
+	return a
 }
