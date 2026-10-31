@@ -77,3 +77,14 @@ func TestLookupRecipes_formule_sums_its_dishes(t *testing.T) {
 	require.NoError(t, err)
 	assert.Empty(t, other, "another restaurant's formule has no recipe here")
 }
+
+// A malformed restaurant id is the caller's mistake, never a database error.
+func TestPublicMenuRefusesMalformedRestaurantID(t *testing.T) {
+	uc := newUC()
+	for _, id := range []string{"' OR '1'='1", "1; DROP TABLE menu_items--"} {
+		_, err := uc.ListRestaurantMenu(context.Background(), id)
+		assert.Equal(t, domain.ErrCodeValidation, errCode(t, err))
+		_, err = uc.ListRestaurantMenuPlans(context.Background(), id)
+		assert.Equal(t, domain.ErrCodeValidation, errCode(t, err))
+	}
+}
