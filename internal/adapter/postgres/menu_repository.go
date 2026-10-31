@@ -18,7 +18,15 @@ func NewMenuRepository(pool *pgxpool.Pool) *MenuRepository {
 	return &MenuRepository{pool: pool}
 }
 
-const itemCols = `m.id, m.tenant_id, m.name, m.description, m.price_cents, m.category, m.emoji, m.rating, m.available, m.sort_order, m.ingredients, m.image_data_url`
+const itemCols = `m.id, m.tenant_id, m.name, m.description, m.price_cents, m.category, m.emoji, m.rating, m.available, m.sort_order, m.ingredients, m.image_data_url, m.allergens`
+
+// allergensOrEmpty: the column is NOT NULL, a dish without allergens is {}.
+func allergensOrEmpty(a []string) []string {
+	if a == nil {
+		return []string{}
+	}
+	return a
+}
 
 // nullableTenant converts the domain's "" (global) into a real SQL NULL —
 // "" is not a valid UUID, so it can never collide with a real tenant id.
@@ -109,19 +117,19 @@ func (r *MenuRepository) GetByID(ctx context.Context, id string) (*domain.MenuIt
 
 func (r *MenuRepository) Create(ctx context.Context, m *domain.MenuItem) error {
 	_, err := r.pool.Exec(ctx,
-		`INSERT INTO menu_items (id, tenant_id, name, description, price_cents, category, emoji, rating, available, sort_order, ingredients, image_data_url)
-		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+		`INSERT INTO menu_items (id, tenant_id, name, description, price_cents, category, emoji, rating, available, sort_order, ingredients, image_data_url, allergens)
+		 VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`,
 		m.ID, nullableTenant(m.TenantID), m.Name, m.Description, m.PriceCents,
-		m.Category, m.Emoji, m.Rating, m.Available, m.SortOrder, m.Ingredients, nullableString(m.ImageDataURL))
+		m.Category, m.Emoji, m.Rating, m.Available, m.SortOrder, m.Ingredients, nullableString(m.ImageDataURL), allergensOrEmpty(m.Allergens))
 	return err
 }
 
 func (r *MenuRepository) Update(ctx context.Context, m *domain.MenuItem) error {
 	tag, err := r.pool.Exec(ctx,
 		`UPDATE menu_items SET name=$1, description=$2, price_cents=$3, category=$4,
-		 emoji=$5, available=$6, ingredients=$7, image_data_url=$8 WHERE id=$9`,
+		 emoji=$5, available=$6, ingredients=$7, image_data_url=$8, allergens=$9 WHERE id=$10`,
 		m.Name, m.Description, m.PriceCents, m.Category, m.Emoji, m.Available, m.Ingredients,
-		nullableString(m.ImageDataURL), m.ID)
+		nullableString(m.ImageDataURL), allergensOrEmpty(m.Allergens), m.ID)
 	if err != nil {
 		return err
 	}
@@ -192,7 +200,7 @@ func scanItem(row rowScanner) (*domain.MenuItem, error) {
 	var m domain.MenuItem
 	var tenantID, imageDataURL *string
 	if err := row.Scan(&m.ID, &tenantID, &m.Name, &m.Description, &m.PriceCents,
-		&m.Category, &m.Emoji, &m.Rating, &m.Available, &m.SortOrder, &m.Ingredients, &imageDataURL); err != nil {
+		&m.Category, &m.Emoji, &m.Rating, &m.Available, &m.SortOrder, &m.Ingredients, &imageDataURL, &m.Allergens); err != nil {
 		return nil, err
 	}
 	if tenantID != nil {
@@ -209,7 +217,7 @@ func scanItemWithOverride(row rowScanner) (*domain.MenuItem, bool, error) {
 	var tenantID, imageDataURL *string
 	var hidden bool
 	if err := row.Scan(&m.ID, &tenantID, &m.Name, &m.Description, &m.PriceCents,
-		&m.Category, &m.Emoji, &m.Rating, &m.Available, &m.SortOrder, &m.Ingredients, &imageDataURL, &hidden); err != nil {
+		&m.Category, &m.Emoji, &m.Rating, &m.Available, &m.SortOrder, &m.Ingredients, &imageDataURL, &m.Allergens, &hidden); err != nil {
 		return nil, false, err
 	}
 	if tenantID != nil {

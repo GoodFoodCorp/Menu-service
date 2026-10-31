@@ -26,6 +26,8 @@ type MenuItem struct {
 	// inventory at authoring time, but stock stays the source of truth for
 	// actual quantities — this field is purely compositional/display.
 	Ingredients []string
+	// Allergens are codes from Allergens (INCO annex II).
+	Allergens []string
 	// HiddenForViewer is transient (not a column on menu_items itself): set
 	// only when listing a global item for a specific franchisee, from
 	// menu_item_tenant_overrides. A franchisee can hide a default dish from
@@ -47,8 +49,15 @@ type MenuItemInput struct {
 	Emoji        string
 	Available    bool
 	Ingredients  []string
+	Allergens    []string
 	ImageDataURL string
 }
+
+// Text limits: what a menu card and the kitchen ticket can show.
+const (
+	maxNameLength        = 120
+	maxDescriptionLength = 1000
+)
 
 func (in MenuItemInput) validate() error {
 	if strings.TrimSpace(in.Name) == "" {
@@ -60,8 +69,24 @@ func (in MenuItemInput) validate() error {
 	if in.PriceCents <= 0 {
 		return NewValidationError("item price must be greater than zero")
 	}
+	if err := validateTexts(in.Name, in.Description); err != nil {
+		return err
+	}
+	if _, err := CleanAllergens(in.Allergens); err != nil {
+		return err
+	}
 	if err := validateImage(in.ImageDataURL); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateTexts(name, description string) error {
+	if len([]rune(strings.TrimSpace(name))) > maxNameLength {
+		return NewValidationError("the name is limited to 120 characters")
+	}
+	if len([]rune(strings.TrimSpace(description))) > maxDescriptionLength {
+		return NewValidationError("the description is limited to 1000 characters")
 	}
 	return nil
 }
@@ -75,8 +100,13 @@ func validateImage(dataURL string) error {
 	if dataURL == "" {
 		return nil
 	}
-	if !strings.HasPrefix(dataURL, "data:image/") {
-		return NewValidationError("image must be a data:image/... URL")
+	// Bitmaps only: an SVG may carry scripts.
+	bitmap := false
+	for _, prefix := range []string{"data:image/jpeg;", "data:image/png;", "data:image/webp;", "data:image/gif;"} {
+		bitmap = bitmap || strings.HasPrefix(dataURL, prefix)
+	}
+	if !bitmap {
+		return NewValidationError("image must be a data:image/... URL (JPEG, PNG, WebP or GIF)")
 	}
 	if len(dataURL) > maxImageDataURLLen {
 		return NewValidationError("image is too large (max ~3MB)")
@@ -117,8 +147,15 @@ func NewMenuItem(tenantID string, in MenuItemInput, sortOrder int) (*MenuItem, e
 		Available:    in.Available,
 		SortOrder:    sortOrder,
 		Ingredients:  cleanStrings(in.Ingredients),
+		Allergens:    mustCleanAllergens(in.Allergens),
 		ImageDataURL: in.ImageDataURL,
 	}, nil
+}
+
+// mustCleanAllergens is for input validate() already checked.
+func mustCleanAllergens(in []string) []string {
+	out, _ := CleanAllergens(in)
+	return out
 }
 
 // ApplyUpdate mutates an existing item with validated input.
@@ -135,6 +172,7 @@ func (m *MenuItem) ApplyUpdate(in MenuItemInput) error {
 	}
 	m.Available = in.Available
 	m.Ingredients = cleanStrings(in.Ingredients)
+	m.Allergens = mustCleanAllergens(in.Allergens)
 	m.ImageDataURL = in.ImageDataURL
 	return nil
 }
@@ -184,6 +222,9 @@ func (in MenuPlanInput) validate() error {
 	}
 	if len(cleanStrings(in.DishIDs)) == 0 {
 		return NewValidationError("a menu needs at least one dish")
+	}
+	if err := validateTexts(in.Name, in.Description); err != nil {
+		return err
 	}
 	if err := validateImage(in.ImageDataURL); err != nil {
 		return err
