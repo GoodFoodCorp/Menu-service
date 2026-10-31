@@ -74,6 +74,21 @@ func toResponse(m *domain.MenuItem) menuItemResponse {
 	}
 }
 
+// dishMatchResponse is a search result: the dish (no photo) and the
+// restaurants that hid it when it is a global one.
+type dishMatchResponse struct {
+	menuItemResponse
+	HiddenIn []string `json:"hidden_in"`
+}
+
+func toMatchResponses(matches []domain.DishMatch) []dishMatchResponse {
+	out := make([]dishMatchResponse, 0, len(matches))
+	for i := range matches {
+		out = append(out, dishMatchResponse{menuItemResponse: toResponse(&matches[i].Item), HiddenIn: matches[i].HiddenIn})
+	}
+	return out
+}
+
 func toResponseList(items []domain.MenuItem) []menuItemResponse {
 	out := make([]menuItemResponse, 0, len(items))
 	for i := range items {

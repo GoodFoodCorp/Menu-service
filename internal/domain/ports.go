@@ -21,6 +21,9 @@ type MenuRepository interface {
 	// favorited dishes, which may span several restaurants). Unknown ids are
 	// silently skipped rather than erroring.
 	ListByIDs(ctx context.Context, ids []string) ([]MenuItem, error)
+	// SearchAvailable returns up to limit available dishes whose folded name
+	// or category contains folded (see FoldSearch), across every restaurant.
+	SearchAvailable(ctx context.Context, folded string, limit int) ([]DishMatch, error)
 	Create(ctx context.Context, item *MenuItem) error
 	Update(ctx context.Context, item *MenuItem) error
 	Delete(ctx context.Context, id string) error

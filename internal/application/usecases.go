@@ -83,6 +83,26 @@ func (uc *UseCases) ListRestaurantMenuPlans(ctx context.Context, restaurantID st
 	return uc.plans.ListAvailableByTenant(ctx, restaurantID)
 }
 
+// MaxDishMatches bounds a dish search; MinSearchLength/MaxSearchLength bound
+// what is searched (in characters).
+const (
+	MaxDishMatches  = 50
+	MinSearchLength = 2
+	MaxSearchLength = 80
+)
+
+// SearchDishes finds the available dishes of the whole network whose name or
+// category contains q (case and accents ignored), each with the restaurants
+// it is offered in — so a dish served in several restaurants can be ordered
+// from any of them.
+func (uc *UseCases) SearchDishes(ctx context.Context, q string) ([]domain.DishMatch, error) {
+	folded := domain.FoldSearch(q)
+	if n := len([]rune(folded)); n < MinSearchLength || n > MaxSearchLength {
+		return nil, domain.NewValidationError(fmt.Sprintf("q must be %d to %d characters", MinSearchLength, MaxSearchLength))
+	}
+	return uc.menu.SearchAvailable(ctx, folded, MaxDishMatches)
+}
+
 // ListByIDs resolves dish ids to their details (public — used to render a
 // customer's favorited dishes, which may belong to different restaurants).
 // MaxIDsPerLookup bounds a by-ids request (favorites page).
