@@ -71,6 +71,16 @@ func (h *MenuHandler) ListPublic(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, toResponseList(items))
 }
 
+// GET /api/menu/search?q=burger  (public — a dish in every restaurant serving it)
+func (h *MenuHandler) Search(w http.ResponseWriter, r *http.Request) {
+	matches, err := h.uc.SearchDishes(r.Context(), r.URL.Query().Get("q"))
+	if err != nil {
+		writeDomainError(w, r, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, toMatchResponses(matches))
+}
+
 // GET /api/menu/by-ids?ids=a,b,c  (public — resolves favorited dishes)
 func (h *MenuHandler) ListByIDs(w http.ResponseWriter, r *http.Request) {
 	raw := r.URL.Query().Get("ids")

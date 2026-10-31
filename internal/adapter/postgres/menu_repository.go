@@ -3,6 +3,7 @@ package postgres
 import (
 	"context"
 	"errors"
+	"strings"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -171,6 +172,47 @@ func (r *MenuRepository) ListByIDs(ctx context.Context, ids []string) ([]domain.
 	}
 	defer rows.Close()
 	return scanItems(rows)
+}
+
+// likeEscaper keeps % and _ typed by a customer literal in a LIKE pattern.
+var likeEscaper = strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`)
+
+// SearchAvailable finds available dishes by name or category, each with the
+// restaurants that hid it (a global dish is offered everywhere else).
+func (r *MenuRepository) SearchAvailable(ctx context.Context, folded string, limit int) ([]domain.DishMatch, error) {
+	rows, err := r.pool.Query(ctx,
+		`SELECT `+itemCols+`,
+		   ARRAY(SELECT o.tenant_id::text FROM menu_item_tenant_overrides o WHERE o.menu_item_id = m.id)
+		 FROM menu_items m
+		 WHERE m.available = TRUE
+		   AND (`+domain.FoldSQL("m.name")+` LIKE $1 OR `+domain.FoldSQL("m.category")+` LIKE $1)
+		 ORDER BY (`+domain.FoldSQL("m.name")+` LIKE $2) DESC, m.name ASC
+		 LIMIT $3`,
+		"%"+likeEscaper.Replace(folded)+"%", likeEscaper.Replace(folded)+"%", limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	matches := []domain.DishMatch{}
+	for rows.Next() {
+		var m domain.MenuItem
+		var tenantID, imageDataURL *string
+		var hiddenIn []string
+		if err := rows.Scan(&m.ID, &tenantID, &m.Name, &m.Description, &m.PriceCents,
+			&m.Category, &m.Emoji, &m.Rating, &m.Available, &m.SortOrder, &m.Ingredients, &imageDataURL, &m.Allergens, &hiddenIn); err != nil {
+			return nil, err
+		}
+		if tenantID != nil {
+			m.TenantID = *tenantID
+		}
+		if hiddenIn == nil {
+			hiddenIn = []string{}
+		}
+		// No photo: search results stay light (a photo is up to a few hundred KB).
+		matches = append(matches, domain.DishMatch{Item: m, HiddenIn: hiddenIn})
+	}
+	return matches, rows.Err()
 }
 
 // ToggleTenantOverride hides/shows a global item for one restaurant only.

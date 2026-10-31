@@ -74,6 +74,26 @@ func (f *fakeRepo) GetByID(_ context.Context, id string) (*domain.MenuItem, erro
 	return &cp, nil
 }
 
+func (f *fakeRepo) SearchAvailable(_ context.Context, folded string, limit int) ([]domain.DishMatch, error) {
+	out := []domain.DishMatch{}
+	for _, m := range f.items {
+		if !m.Available || !(strings.Contains(domain.FoldSearch(m.Name), folded) || strings.Contains(domain.FoldSearch(m.Category), folded)) {
+			continue
+		}
+		hidden := []string{}
+		for key, on := range f.overrides {
+			if tenant, item, _ := strings.Cut(key, "|"); on && item == m.ID {
+				hidden = append(hidden, tenant)
+			}
+		}
+		out = append(out, domain.DishMatch{Item: *m, HiddenIn: hidden})
+		if len(out) == limit {
+			break
+		}
+	}
+	return out, nil
+}
+
 func (f *fakeRepo) ListByIDs(_ context.Context, ids []string) ([]domain.MenuItem, error) {
 	out := []domain.MenuItem{}
 	for _, id := range ids {

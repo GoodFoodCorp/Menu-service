@@ -49,6 +49,7 @@ func NewRouter(handler *MenuHandler, jwtCfg JWTConfig, serviceKey string, log ze
 		// Public catalog for customers (browse a restaurant's dishes)
 		r.With(PublicCache(publicCacheSeconds)).Get("/", handler.ListPublic)
 		r.With(PublicCache(publicCacheSeconds)).Get("/by-ids", handler.ListByIDs)
+		r.With(PublicCache(publicCacheSeconds)).Get("/search", handler.Search)
 
 		// Manager (own restaurant) / admin (global catalog) management
 		r.Group(func(r chi.Router) {
